@@ -11,12 +11,13 @@ import (
 	"time"
 
 	"github.com/go-chi/chi/v5"
-	"github.com/go-chi/chi/v5/middleware"
+	chimiddleware "github.com/go-chi/chi/v5/middleware"
 
 	"ticket-system/internal/auth"
 	"ticket-system/internal/config"
 	"ticket-system/internal/database"
 	"ticket-system/internal/handlers"
+	appMiddleware "ticket-system/internal/middleware"
 	"ticket-system/internal/repository"
 	"ticket-system/internal/service"
 )
@@ -46,12 +47,12 @@ func main() {
 	r := chi.NewRouter()
 
 	// Middleware
-	r.Use(middleware.RequestID)
-	r.Use(middleware.RealIP)
-	r.Use(middleware.Logger)
-	r.Use(middleware.Recoverer)
+	r.Use(chimiddleware.RequestID)
+	r.Use(chimiddleware.RealIP)
+	r.Use(chimiddleware.Logger)
+	r.Use(chimiddleware.Recoverer)
 
-	// Health check endpoint (always independent of DB)
+	// Health check endpoint (always public and independent of DB)
 	r.Get("/health", handlers.Health)
 
 	// Authentication routes
@@ -65,10 +66,21 @@ func main() {
 		authSvc := service.NewAuthService(userRepo, tokenManager)
 		authHandler := handlers.NewAuthHandler(authSvc)
 
+		// Public authentication routes
 		r.Post("/auth/register", authHandler.Register)
 		r.Post("/auth/login", authHandler.Login)
+
+		// Protected route architecture ready for upcoming Prompt 5 (Tickets)
+		r.Group(func(protected chi.Router) {
+			protected.Use(appMiddleware.Auth(tokenManager))
+			// Future protected endpoints will be registered here:
+			// POST /tickets
+			// GET /tickets
+			// GET /tickets/{id}
+			// PATCH /tickets/{id}/status
+		})
 	} else {
-		// If MongoDB is not connected, register stub that returns 503 Service Unavailable
+		// If MongoDB is not connected, register stubs that return 503 Service Unavailable
 		r.Post("/auth/register", func(w http.ResponseWriter, r *http.Request) {
 			http.Error(w, `{"error":"database unavailable"}`, http.StatusServiceUnavailable)
 		})
