@@ -19,6 +19,7 @@ import (
 	"ticket-system/internal/handlers"
 	appMiddleware "ticket-system/internal/middleware"
 	"ticket-system/internal/repository"
+	"ticket-system/internal/response"
 	"ticket-system/internal/service"
 )
 
@@ -50,7 +51,13 @@ func main() {
 	r.Use(chimiddleware.RequestID)
 	r.Use(chimiddleware.RealIP)
 	r.Use(chimiddleware.Logger)
-	r.Use(chimiddleware.Recoverer)
+	// Custom NotFound and MethodNotAllowed handlers returning clean JSON errors
+	r.NotFound(func(w http.ResponseWriter, r *http.Request) {
+		response.Error(w, http.StatusNotFound, "resource not found")
+	})
+	r.MethodNotAllowed(func(w http.ResponseWriter, r *http.Request) {
+		response.Error(w, http.StatusMethodNotAllowed, "method not allowed")
+	})
 
 	// Health check endpoint (always public and independent of DB)
 	r.Get("/health", handlers.Health)
