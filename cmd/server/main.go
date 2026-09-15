@@ -79,6 +79,7 @@ func main() {
 			protected.Use(appMiddleware.Auth(tokenManager))
 			protected.Post("/tickets", ticketHandler.Create)
 			protected.Get("/tickets", ticketHandler.List)
+			protected.Get("/tickets/{id}", ticketHandler.GetByID)
 		})
 	} else {
 		// If MongoDB is not connected, register stubs that return 503 Service Unavailable

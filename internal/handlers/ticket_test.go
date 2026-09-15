@@ -16,6 +16,7 @@ import (
 	"ticket-system/internal/handlers"
 	appMiddleware "ticket-system/internal/middleware"
 	"ticket-system/internal/models"
+	"ticket-system/internal/repository"
 	"ticket-system/internal/service"
 )
 
@@ -59,7 +60,7 @@ func (m *mockTicketRepo) GetTicketByIDAndUserID(ctx context.Context, ticketID, u
 			return t, nil
 		}
 	}
-	return nil, nil
+	return nil, repository.ErrNotFound
 }
 
 func (m *mockTicketRepo) UpdateTicketStatus(ctx context.Context, ticketID, userID bson.ObjectID, status models.TicketStatus) error {
@@ -70,7 +71,7 @@ func (m *mockTicketRepo) UpdateTicketStatus(ctx context.Context, ticketID, userI
 			return nil
 		}
 	}
-	return nil
+	return repository.ErrNotFound
 }
 
 func setupTicketTestRouter() (http.Handler, *auth.TokenManager, bson.ObjectID, bson.ObjectID) {
@@ -86,6 +87,7 @@ func setupTicketTestRouter() (http.Handler, *auth.TokenManager, bson.ObjectID, b
 		protected.Use(appMiddleware.Auth(tm))
 		protected.Post("/tickets", handler.Create)
 		protected.Get("/tickets", handler.List)
+		protected.Get("/tickets/{id}", handler.GetByID)
 	})
 
 	userA := bson.NewObjectID()
@@ -288,6 +290,172 @@ func TestTicketEndpoints_SecurityAndOwnership(t *testing.T) {
 		_ = json.Unmarshal(rr.Body.Bytes(), &listC)
 		if len(listC) != 0 {
 			t.Errorf("expected 0 tickets for user C, got %d (raw: %s)", len(listC), bodyStr)
+		}
+	}
+}
+
+func TestGetTicketByID_SecurityAndOwnership(t *testing.T) {
+	router, tm, userA, userB := setupTicketTestRouter()
+
+	tokenA, _ := tm.GenerateToken(userA)
+	tokenB, _ := tm.GenerateToken(userB)
+
+	// 1. User A creates Ticket A
+	var ticketA service.TicketOutput
+	{
+		req, _ := http.NewRequest(http.MethodPost, "/tickets", bytes.NewBufferString(`{"title":"User A Ticket","description":"Description for ticket A"}`))
+		req.Header.Set("Content-Type", "application/json")
+		req.Header.Set("Authorization", "Bearer "+tokenA)
+		rr := httptest.NewRecorder()
+		router.ServeHTTP(rr, req)
+		if rr.Code != http.StatusCreated {
+			t.Fatalf("expected 201 for ticket A creation, got %d: %s", rr.Code, rr.Body.String())
+		}
+		_ = json.Unmarshal(rr.Body.Bytes(), &ticketA)
+	}
+
+	// 2. User B creates Ticket B
+	var ticketB service.TicketOutput
+	{
+		req, _ := http.NewRequest(http.MethodPost, "/tickets", bytes.NewBufferString(`{"title":"User B Ticket","description":"Description for ticket B"}`))
+		req.Header.Set("Content-Type", "application/json")
+		req.Header.Set("Authorization", "Bearer "+tokenB)
+		rr := httptest.NewRecorder()
+		router.ServeHTTP(rr, req)
+		if rr.Code != http.StatusCreated {
+			t.Fatalf("expected 201 for ticket B creation, got %d: %s", rr.Code, rr.Body.String())
+		}
+		_ = json.Unmarshal(rr.Body.Bytes(), &ticketB)
+	}
+
+	// 3. User A can retrieve User A's Ticket A -> 200 OK
+	{
+		req, _ := http.NewRequest(http.MethodGet, "/tickets/"+ticketA.ID, nil)
+		req.Header.Set("Authorization", "Bearer "+tokenA)
+		rr := httptest.NewRecorder()
+		router.ServeHTTP(rr, req)
+
+		if rr.Code != http.StatusOK {
+			t.Fatalf("expected 200 OK for User A fetching Ticket A, got %d: %s", rr.Code, rr.Body.String())
+		}
+
+		var fetched service.TicketOutput
+		_ = json.Unmarshal(rr.Body.Bytes(), &fetched)
+		if fetched.ID != ticketA.ID || fetched.Title != "User A Ticket" {
+			t.Errorf("expected ticket A data, got %+v", fetched)
+		}
+	}
+
+	// 4. User B can retrieve User B's Ticket B -> 200 OK
+	{
+		req, _ := http.NewRequest(http.MethodGet, "/tickets/"+ticketB.ID, nil)
+		req.Header.Set("Authorization", "Bearer "+tokenB)
+		rr := httptest.NewRecorder()
+		router.ServeHTTP(rr, req)
+
+		if rr.Code != http.StatusOK {
+			t.Fatalf("expected 200 OK for User B fetching Ticket B, got %d: %s", rr.Code, rr.Body.String())
+		}
+
+		var fetched service.TicketOutput
+		_ = json.Unmarshal(rr.Body.Bytes(), &fetched)
+		if fetched.ID != ticketB.ID || fetched.Title != "User B Ticket" {
+			t.Errorf("expected ticket B data, got %+v", fetched)
+		}
+	}
+
+	// 5. CRITICAL: User A attempts to retrieve User B's Ticket B -> 404 Not Found
+	{
+		req, _ := http.NewRequest(http.MethodGet, "/tickets/"+ticketB.ID, nil)
+		req.Header.Set("Authorization", "Bearer "+tokenA)
+		rr := httptest.NewRecorder()
+		router.ServeHTTP(rr, req)
+
+		if rr.Code != http.StatusNotFound {
+			t.Fatalf("SECURITY FAW: expected 404 for User A accessing User B's ticket, got %d: %s", rr.Code, rr.Body.String())
+		}
+
+		// Verify zero data leakage: must not contain title, description, or user info
+		bodyStr := rr.Body.String()
+		if bytes.Contains(rr.Body.Bytes(), []byte("User B Ticket")) || bytes.Contains(rr.Body.Bytes(), []byte("Description for ticket B")) {
+			t.Errorf("DATA LEAKAGE: Response leaked User B's ticket details: %s", bodyStr)
+		}
+
+		var errResp map[string]string
+		_ = json.Unmarshal(rr.Body.Bytes(), &errResp)
+		if errResp["error"] != "ticket not found" {
+			t.Errorf("expected generic error 'ticket not found', got %q", errResp["error"])
+		}
+	}
+
+	// 6. CRITICAL: User B attempts to retrieve User A's Ticket A -> 404 Not Found
+	{
+		req, _ := http.NewRequest(http.MethodGet, "/tickets/"+ticketA.ID, nil)
+		req.Header.Set("Authorization", "Bearer "+tokenB)
+		rr := httptest.NewRecorder()
+		router.ServeHTTP(rr, req)
+
+		if rr.Code != http.StatusNotFound {
+			t.Fatalf("SECURITY FAW: expected 404 for User B accessing User A's ticket, got %d: %s", rr.Code, rr.Body.String())
+		}
+
+		bodyStr := rr.Body.String()
+		if bytes.Contains(rr.Body.Bytes(), []byte("User A Ticket")) || bytes.Contains(rr.Body.Bytes(), []byte("Description for ticket A")) {
+			t.Errorf("DATA LEAKAGE: Response leaked User A's ticket details: %s", bodyStr)
+		}
+	}
+
+	// 7. Nonexistent valid ObjectID -> 404 Not Found
+	{
+		nonExistentID := bson.NewObjectID().Hex()
+		req, _ := http.NewRequest(http.MethodGet, "/tickets/"+nonExistentID, nil)
+		req.Header.Set("Authorization", "Bearer "+tokenA)
+		rr := httptest.NewRecorder()
+		router.ServeHTTP(rr, req)
+
+		if rr.Code != http.StatusNotFound {
+			t.Errorf("expected 404 for nonexistent ticket, got %d: %s", rr.Code, rr.Body.String())
+		}
+	}
+
+	// 8. Malformed/Invalid ticket ID -> 400 Bad Request
+	{
+		req, _ := http.NewRequest(http.MethodGet, "/tickets/not-a-valid-object-id", nil)
+		req.Header.Set("Authorization", "Bearer "+tokenA)
+		rr := httptest.NewRecorder()
+		router.ServeHTTP(rr, req)
+
+		if rr.Code != http.StatusBadRequest {
+			t.Errorf("expected 400 for malformed ticket ID, got %d: %s", rr.Code, rr.Body.String())
+		}
+
+		var errResp map[string]string
+		_ = json.Unmarshal(rr.Body.Bytes(), &errResp)
+		if errResp["error"] != "invalid ticket id" {
+			t.Errorf("expected error 'invalid ticket id', got %q", errResp["error"])
+		}
+	}
+
+	// 9. Missing Authorization header -> 401 Unauthorized
+	{
+		req, _ := http.NewRequest(http.MethodGet, "/tickets/"+ticketA.ID, nil)
+		rr := httptest.NewRecorder()
+		router.ServeHTTP(rr, req)
+
+		if rr.Code != http.StatusUnauthorized {
+			t.Errorf("expected 401 for unauthenticated request, got %d", rr.Code)
+		}
+	}
+
+	// 10. Invalid JWT -> 401 Unauthorized
+	{
+		req, _ := http.NewRequest(http.MethodGet, "/tickets/"+ticketA.ID, nil)
+		req.Header.Set("Authorization", "Bearer invalid.token.here")
+		rr := httptest.NewRecorder()
+		router.ServeHTTP(rr, req)
+
+		if rr.Code != http.StatusUnauthorized {
+			t.Errorf("expected 401 for invalid token, got %d", rr.Code)
 		}
 	}
 }

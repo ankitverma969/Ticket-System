@@ -5,6 +5,9 @@ import (
 	"errors"
 	"net/http"
 
+	"github.com/go-chi/chi/v5"
+	"go.mongodb.org/mongo-driver/v2/bson"
+
 	"ticket-system/internal/middleware"
 	"ticket-system/internal/response"
 	"ticket-system/internal/service"
@@ -74,4 +77,38 @@ func (h *TicketHandler) List(w http.ResponseWriter, r *http.Request) {
 	}
 
 	response.JSON(w, http.StatusOK, tickets)
+}
+
+// GetByID handles GET /tickets/{id}.
+// Returns the ticket if it belongs to the authenticated user.
+// Returns 400 for malformed/invalid ticket ID.
+// Returns 404 if ticket doesn't exist OR belongs to another user (preventing information leakage).
+func (h *TicketHandler) GetByID(w http.ResponseWriter, r *http.Request) {
+	userID, ok := middleware.GetUserID(r.Context())
+	if !ok || userID.IsZero() {
+		response.Error(w, http.StatusUnauthorized, "unauthorized")
+		return
+	}
+
+	idParam := chi.URLParam(r, "id")
+	ticketID, err := bson.ObjectIDFromHex(idParam)
+	if err != nil || ticketID.IsZero() {
+		response.Error(w, http.StatusBadRequest, "invalid ticket id")
+		return
+	}
+
+	ticket, err := h.ticketService.GetTicketByIDAndUserID(r.Context(), ticketID, userID)
+	if err != nil {
+		switch {
+		case errors.Is(err, service.ErrTicketNotFound):
+			response.Error(w, http.StatusNotFound, "ticket not found")
+		case errors.Is(err, service.ErrUnauthorized):
+			response.Error(w, http.StatusUnauthorized, "unauthorized")
+		default:
+			response.Error(w, http.StatusInternalServerError, "internal server error")
+		}
+		return
+	}
+
+	response.JSON(w, http.StatusOK, ticket)
 }

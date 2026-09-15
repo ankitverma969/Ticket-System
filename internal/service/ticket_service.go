@@ -18,6 +18,7 @@ var (
 	ErrEmptyDescription = errors.New("ticket description cannot be empty")
 	ErrDescTooLong      = errors.New("ticket description exceeds maximum length of 5000 characters")
 	ErrUnauthorized     = errors.New("unauthorized")
+	ErrTicketNotFound   = errors.New("ticket not found")
 )
 
 const (
@@ -47,6 +48,7 @@ type TicketOutput struct {
 type TicketService interface {
 	CreateTicket(ctx context.Context, userID bson.ObjectID, input CreateTicketInput) (*TicketOutput, error)
 	GetTicketsByUserID(ctx context.Context, userID bson.ObjectID) ([]*TicketOutput, error)
+	GetTicketByIDAndUserID(ctx context.Context, ticketID, userID bson.ObjectID) (*TicketOutput, error)
 }
 
 type ticketService struct {
@@ -111,6 +113,22 @@ func (s *ticketService) GetTicketsByUserID(ctx context.Context, userID bson.Obje
 	}
 
 	return outputs, nil
+}
+
+func (s *ticketService) GetTicketByIDAndUserID(ctx context.Context, ticketID, userID bson.ObjectID) (*TicketOutput, error) {
+	if userID.IsZero() {
+		return nil, ErrUnauthorized
+	}
+
+	ticket, err := s.ticketRepo.GetTicketByIDAndUserID(ctx, ticketID, userID)
+	if err != nil {
+		if errors.Is(err, repository.ErrNotFound) {
+			return nil, ErrTicketNotFound
+		}
+		return nil, err
+	}
+
+	return toTicketOutput(ticket), nil
 }
 
 func toTicketOutput(t *models.Ticket) *TicketOutput {
