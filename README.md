@@ -1,12 +1,13 @@
 # Go Ticket System
 
-This repository contains the Go backend for the Ticket System.
+This repository contains the Go backend for the Ticket System assignment.
 
 ## Environment Variables
-Copy `.env.example` to `.env` and set the configuration values:
+Copy `.env.example` to `.env` and set configuration values if needed:
 - `PORT`: HTTP server port (defaults to `8080`)
-- `DATABASE_URL`: PostgreSQL connection string (for upcoming stages)
-- `JWT_SECRET`: Secret key for signing JWT tokens (for upcoming stages)
+- `MONGODB_URI`: MongoDB connection URI (for upcoming database stage)
+- `MONGODB_DATABASE`: MongoDB database name (defaults to `ticket_system`)
+- `JWT_SECRET`: Secret key for signing JWT tokens (for upcoming authentication stage)
 - `JWT_EXPIRATION`: Token validity duration (e.g. `24h`)
 
 ## Development
@@ -18,4 +19,15 @@ go run ./cmd/server
 Run tests:
 ```bash
 go test ./...
+```
+
+Verify health check:
+```bash
+curl http://localhost:8080/health
+```
+Response:
+```json
+{
+  "status": "ok"
+}
 ```

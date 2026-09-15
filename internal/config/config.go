@@ -7,21 +7,30 @@ import (
 
 // Config holds the application configuration loaded from environment variables.
 type Config struct {
-	Port          string
-	DatabaseURL   string
-	JWTSecret     string
-	JWTExpiration time.Duration
+	Port            string
+	MongoDBURI      string
+	MongoDBDatabase string
+	JWTSecret       string
+	JWTExpiration   time.Duration
 }
 
 // Load loads the configuration from the environment, applying sensible defaults.
-// This allows Prompt 1 to run seamlessly without database or JWT variables configured.
+// This allows Prompt 1 to run seamlessly without MongoDB or JWT variables configured.
 func Load() *Config {
 	port := os.Getenv("PORT")
 	if port == "" {
 		port = "8080"
 	}
 
-	databaseURL := os.Getenv("DATABASE_URL")
+	mongoURI := os.Getenv("MONGODB_URI")
+	if mongoURI == "" {
+		mongoURI = "mongodb://localhost:27017"
+	}
+
+	mongoDB := os.Getenv("MONGODB_DATABASE")
+	if mongoDB == "" {
+		mongoDB = "ticket_system"
+	}
 
 	jwtSecret := os.Getenv("JWT_SECRET")
 
@@ -37,9 +46,10 @@ func Load() *Config {
 	}
 
 	return &Config{
-		Port:          port,
-		DatabaseURL:   databaseURL,
-		JWTSecret:     jwtSecret,
-		JWTExpiration: jwtExp,
+		Port:            port,
+		MongoDBURI:      mongoURI,
+		MongoDBDatabase: mongoDB,
+		JWTSecret:       jwtSecret,
+		JWTExpiration:   jwtExp,
 	}
 }
