@@ -80,6 +80,7 @@ func main() {
 			protected.Post("/tickets", ticketHandler.Create)
 			protected.Get("/tickets", ticketHandler.List)
 			protected.Get("/tickets/{id}", ticketHandler.GetByID)
+			protected.Patch("/tickets/{id}/status", ticketHandler.UpdateStatus)
 		})
 	} else {
 		// If MongoDB is not connected, register stubs that return 503 Service Unavailable

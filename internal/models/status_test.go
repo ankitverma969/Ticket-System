@@ -38,10 +38,10 @@ func TestTicketStatusTransitions(t *testing.T) {
 		{"open -> in_progress (valid)", models.StatusOpen, models.StatusInProgress, true},
 		{"in_progress -> closed (valid)", models.StatusInProgress, models.StatusClosed, true},
 
-		// Same-status no-ops
-		{"open -> open (no-op)", models.StatusOpen, models.StatusOpen, true},
-		{"in_progress -> in_progress (no-op)", models.StatusInProgress, models.StatusInProgress, true},
-		{"closed -> closed (no-op)", models.StatusClosed, models.StatusClosed, true},
+		// Same-status transitions (invalid per prompt 7 rules)
+		{"open -> open (invalid)", models.StatusOpen, models.StatusOpen, false},
+		{"in_progress -> in_progress (invalid)", models.StatusInProgress, models.StatusInProgress, false},
+		{"closed -> closed (invalid terminal)", models.StatusClosed, models.StatusClosed, false},
 
 		// Invalid transitions
 		{"open -> closed (invalid jump)", models.StatusOpen, models.StatusClosed, false},

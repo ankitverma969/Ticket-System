@@ -28,17 +28,14 @@ func (s TicketStatus) IsValid() bool {
 	}
 }
 
-// CanTransitionTo validates the mandatory business rule:
-// open -> in_progress -> closed
-// Closed tickets cannot be reopened.
-// Retaining the same status is considered a valid no-op.
+// CanTransitionTo strictly validates the mandatory state machine flow:
+// open -> in_progress
+// in_progress -> closed
+// All other transitions (including same-status no-ops, jumps like open->closed, backward transitions,
+// and any transition from closed) are strictly invalid.
 func (s TicketStatus) CanTransitionTo(target TicketStatus) bool {
 	if !target.IsValid() {
 		return false
-	}
-
-	if s == target {
-		return true
 	}
 
 	switch s {
@@ -47,7 +44,7 @@ func (s TicketStatus) CanTransitionTo(target TicketStatus) bool {
 	case StatusInProgress:
 		return target == StatusClosed
 	case StatusClosed:
-		return false // Closed ticket cannot be reopened or changed
+		return false // Closed ticket can NEVER be reopened or transitioned
 	default:
 		return false
 	}

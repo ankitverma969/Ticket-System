@@ -15,4 +15,5 @@ type TicketRepository interface {
 	GetTicketsByUserID(ctx context.Context, userID bson.ObjectID) ([]*models.Ticket, error)
 	GetTicketByIDAndUserID(ctx context.Context, ticketID, userID bson.ObjectID) (*models.Ticket, error)
 	UpdateTicketStatus(ctx context.Context, ticketID, userID bson.ObjectID, status models.TicketStatus) error
+	UpdateTicketStatusAtomic(ctx context.Context, ticketID, userID bson.ObjectID, expectedCurrent models.TicketStatus, newStatus models.TicketStatus) error
 }

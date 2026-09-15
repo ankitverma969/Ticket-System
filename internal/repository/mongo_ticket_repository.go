@@ -108,3 +108,31 @@ func (r *mongoTicketRepository) UpdateTicketStatus(ctx context.Context, ticketID
 
 	return nil
 }
+
+// UpdateTicketStatusAtomic conditionally updates a ticket status only if it matches expectedCurrent.
+// This prevents race conditions and state machine violations from concurrent requests.
+func (r *mongoTicketRepository) UpdateTicketStatusAtomic(ctx context.Context, ticketID, userID bson.ObjectID, expectedCurrent models.TicketStatus, newStatus models.TicketStatus) error {
+	filter := bson.M{
+		"_id":     ticketID,
+		"user_id": userID,
+		"status":  expectedCurrent,
+	}
+
+	update := bson.M{
+		"$set": bson.M{
+			"status":     newStatus,
+			"updated_at": time.Now().UTC(),
+		},
+	}
+
+	result, err := r.collection.UpdateOne(ctx, filter, update)
+	if err != nil {
+		return err
+	}
+
+	if result.MatchedCount == 0 {
+		return ErrNotFound
+	}
+
+	return nil
+}
