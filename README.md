@@ -242,14 +242,30 @@ go test -v -count=1 ./...
 
 ---
 
-## 🚀 Deploying to Cloud (e.g., Render)
+## 🚀 Deploying to Cloud (AWS & Render)
 
+### Option A: Deploy to AWS App Runner / ECS
+1. **Container Registry (Amazon ECR)**:
+   - Create a private repository in Amazon ECR (e.g. `ticket-system`).
+   - Authenticate Docker and push the image:
+     ```bash
+     docker tag ticket-system:latest <aws_account_id>.dkr.ecr.<region>.amazonaws.com/ticket-system:latest
+     docker push <aws_account_id>.dkr.ecr.<region>.amazonaws.com/ticket-system:latest
+     ```
+2. **Deploy Service**:
+   - Go to **AWS App Runner** or **AWS ECS Fargate**.
+   - Select the container image from ECR.
+   - Configure Port: `8080`.
+   - Configure Environment Variables: `MONGODB_URI`, `MONGODB_DATABASE`, `JWT_SECRET`, `JWT_EXPIRATION`.
+   - Set Health Check Path: `/health`.
+
+### Option B: Deploy on Render
 1. **Push your code to GitHub**:
    ```bash
    git push origin main
    ```
 2. **Create free MongoDB Database**:
-   - Go to [MongoDB Atlas](https://www.mongodb.com/cloud/atlas) and set up a free Shared cluster.
+   - Go to [MongoDB Atlas](https://www.mongodb.com/cloud/atlas) and set up a free cluster.
    - Whitelist IP `0.0.0.0/0` in Network Access.
    - Copy your connection string (`mongodb+srv://...`).
 3. **Deploy on Render**:
