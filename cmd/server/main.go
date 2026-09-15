@@ -14,7 +14,7 @@ import (
 	chimiddleware "github.com/go-chi/chi/v5/middleware"
 	httpSwagger "github.com/swaggo/http-swagger/v2"
 
-	_ "ticket-system/docs"
+	"ticket-system/docs"
 	"ticket-system/internal/auth"
 	"ticket-system/internal/config"
 	"ticket-system/internal/database"
@@ -27,6 +27,9 @@ import (
 
 func main() {
 	cfg := config.Load()
+
+	// Configure dynamic Swagger API Base URL from API_BASE_URL (defaults to http://localhost:8080)
+	docs.ConfigureAPIBaseURL(cfg.APIBaseURL)
 
 	// Initialize MongoDB connection context
 	initCtx, initCancel := context.WithTimeout(context.Background(), 10*time.Second)

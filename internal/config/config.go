@@ -8,6 +8,7 @@ import (
 // Config holds the application configuration loaded from environment variables.
 type Config struct {
 	Port            string
+	APIBaseURL      string
 	MongoDBURI      string
 	MongoDBDatabase string
 	JWTSecret       string
@@ -20,6 +21,11 @@ func Load() *Config {
 	port := os.Getenv("PORT")
 	if port == "" {
 		port = "8080"
+	}
+
+	apiBaseURL := os.Getenv("API_BASE_URL")
+	if apiBaseURL == "" {
+		apiBaseURL = "http://localhost:8080"
 	}
 
 	mongoURI := os.Getenv("MONGODB_URI")
@@ -47,6 +53,7 @@ func Load() *Config {
 
 	return &Config{
 		Port:            port,
+		APIBaseURL:      apiBaseURL,
 		MongoDBURI:      mongoURI,
 		MongoDBDatabase: mongoDB,
 		JWTSecret:       jwtSecret,
