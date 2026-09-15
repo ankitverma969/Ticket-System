@@ -1,7 +1,7 @@
 # Multi-stage Dockerfile for Ticket System backend
 
 # 1. Builder Stage
-FROM golang:1.24-alpine AS builder
+FROM golang:alpine AS builder
 
 WORKDIR /app
 
