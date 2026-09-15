@@ -1,86 +1,207 @@
-# Ticket System API
+# 🎟️ Ticket System API
 
-A robust, production-ready Ticket System backend implemented in **Go** using the **chi router**, **MongoDB** (official Go driver), **JWT authentication**, and interactive **Swagger/OpenAPI documentation**.
+A reliable, secure, and production-grade support ticket management backend service built in **Go (Golang)** using the **Chi router**, **MongoDB**, **JWT authentication**, and interactive **Swagger/OpenAPI documentation**.
 
-## 🌐 Public Deployment URLs
-- **Interactive Swagger Documentation**: `http://localhost:8080/docs` (or deployed: `https://<deployed-domain>/docs`)
-- **Public Health URL**: `http://localhost:8080/health` (or deployed: `https://<deployed-domain>/health`)
+---
+
+## 💡 What is this Project? (For Everyone & Non-Technical Readers)
+
+Imagine you contact customer support when something goes wrong with a service. The support team creates a **Ticket** (a digital tracking record) describing your problem.
+
+This backend project acts like the **secure digital office and filing system** for those tickets:
+1. **User Accounts**: People can create their personal account and log in securely.
+2. **Digital Security Pass (JWT Token)**: Once you log in, you receive a secure digital badge (like an electronic hotel keycard). You show this badge with every request so the system knows who you are.
+3. **Private Filing Cabinet**: You can create tickets, view only your own tickets, and track their progress. Nobody else can peek at your tickets or edit them.
+4. **Step-by-Step Progress Tracking**: Every ticket starts as **Open**, moves to **In Progress** while being worked on, and is finally marked **Closed**. Once closed, a ticket cannot be reopened.
+
+---
+
+## 🗺️ Visual Architecture & Workflow Diagrams
+
+### 1. Overall System Architecture
+How an incoming request travels from a user's browser or mobile app down to the database:
+
+```mermaid
+flowchart TD
+    User([👤 User / Browser / Mobile App])
+    Docs([📑 Swagger UI /docs])
+
+    subgraph GoServer ["🖥️ Go Backend Application (Port 8080)"]
+        Router["⚡ Chi Router & Middleware\n(Logging, Crash Recovery, Real IP)"]
+        AuthMid["🔒 Auth Middleware\n(Checks Bearer JWT Badge & Extracts User Identity)"]
+        Handlers["🎯 Handlers\n(Validates input data & formats JSON answers)"]
+        Services["🧠 Business Logic Layer\n(Enforces Ticket Rules, Transitions & Passwords)"]
+    end
+
+    subgraph Database ["🗄️ MongoDB Database"]
+        UsersCol[("👥 users collection\n(Secure hashed passwords)")]
+        TicketsCol[("📋 tickets collection\n(Owned tickets & statuses)")]
+    end
+
+    User -->|HTTP Request| Router
+    Docs -->|Interactive API Testing| Router
+    Router --> AuthMid
+    AuthMid --> Handlers
+    Handlers --> Services
+    Services --> UsersCol
+    Services --> TicketsCol
+```
+
+---
+
+### 2. User Authentication & Login Flow
+How a user signs up and gets their secure digital pass:
+
+```mermaid
+sequenceDiagram
+    autonumber
+    actor User as 👤 User / Client
+    participant App as 🖥️ Go Backend Server
+    participant DB as 🗄️ MongoDB Database
+
+    Note over User,DB: Step A: Account Registration
+    User->>App: POST /auth/register (email, password)
+    App->>App: Scramble password with bcrypt (Never stored in plain text!)
+    App->>DB: Save user (email, hashed password)
+    App-->>User: 201 Created (Account Ready)
+
+    Note over User,DB: Step B: Login & Get Security Badge
+    User->>App: POST /auth/login (email, password)
+    App->>DB: Look up user by email
+    App->>App: Compare password with stored scrambled hash
+    App->>App: Create signed JWT Token (Valid for 24h)
+    App-->>User: 200 OK (Returns JWT Token)
+```
+
+---
+
+### 3. Ticket Lifecycle & State Machine
+Every ticket follows a strictly controlled life cycle that prevents mistakes:
+
+```mermaid
+stateDiagram-v2
+    [*] --> open: 🆕 Ticket Created (Automatic start)
+    open --> in_progress: ⚙️ Work Begins (PATCH /tickets/{id}/status)
+    in_progress --> closed: ✅ Resolved & Finished (PATCH /tickets/{id}/status)
+    closed --> [*]: 🔒 Final Terminal State
+
+    note right of open
+      Cannot jump directly from open to closed
+    end note
+
+    note right of closed
+      Cannot be reopened or changed!
+      Protecting audit history.
+    end note
+```
+
+---
+
+### 4. Strict Ownership & Privacy Flow
+Why User A can never tamper with or view User B's tickets:
+
+```mermaid
+flowchart LR
+    UserA["👤 User A\n(Token: User A)"]
+    UserB["👤 User B\n(Token: User B)"]
+
+    subgraph BackendGuard ["🛡️ Ownership Guard"]
+        Check{"Does ticket.user_id\nmatch JWT identity?"}
+    end
+
+    TicketA[("📋 Ticket #101\n(Belongs to User A)")]
+
+    UserA -->|View Ticket #101| Check
+    Check -->|✅ Match| TicketA
+
+    UserB -->|Attempt to view Ticket #101| Check
+    Check -->|❌ Access Denied: 404 Not Found| Rejected["🚫 Hidden / Blocked\n(Prevents spying)"]
+```
+
+---
+
+## 🌐 Public Deployment & Documentation URLs
+- **Interactive Swagger Documentation**: `http://localhost:8080/docs` (or deployed: `https://<your-service>.onrender.com/docs`)
+- **Public Health Check**: `http://localhost:8080/health` (or deployed: `https://<your-service>.onrender.com/health`)
 
 ---
 
 ## 📖 Interactive Swagger / OpenAPI Documentation
 
-Interactive Swagger UI is available out-of-the-box:
+You don't need any complex software or programming tools to test this API! Simply open:
 
 ```text
 http://localhost:8080/docs
 ```
 
-The Swagger UI provides:
-- Inspection of all 7 API endpoints with request/response schemas.
-- Example payloads for tickets, authentication, and status transitions.
-- Interactive testing with the **"Try it out"** button.
-- Built-in **Authorize** modal supporting `Bearer <JWT>` tokens to test protected ticket endpoints.
+The Swagger interface lets you:
+- Explore all 7 endpoints and see their input and output structures.
+- See sample data for every operation.
+- Click **"Try it out"** and execute real requests directly from your web browser.
+- Use the **Authorize** button to log in and test protected ticket features.
 
-### Authentication & Testing Workflow in Swagger UI
-
-1. Start the application (`go run ./cmd/server` or `docker run -p 8080:8080 ticket-system`).
-2. Open `http://localhost:8080/docs` in your browser.
-3. Scroll to **Authentication** and expand `POST /auth/register` to register a new user account.
-4. Expand `POST /auth/login`, click **Try it out**, enter your credentials, and click **Execute**.
-5. Copy the returned `token` from the response JSON body.
-6. Scroll to the top of the Swagger page and click the green **Authorize** button.
-7. Enter `Bearer <your_token>` (or `<your_token>`) and click **Authorize**, then **Close**.
-8. Test the protected **Tickets** endpoints:
-   - `POST /tickets`: Create a new ticket (ownership is securely derived from JWT).
-   - `GET /tickets`: List tickets belonging strictly to the authenticated user.
-   - `GET /tickets/{id}`: Inspect a specific ticket.
-   - `PATCH /tickets/{id}/status`: Transition ticket status (`open -> in_progress -> closed`).
+### Step-by-Step Swagger Testing Guide:
+1. **Start the server**: Run `go run ./cmd/server` or start your Docker container.
+2. **Open the page**: In your browser, navigate to `http://localhost:8080/docs`.
+3. **Register an account**:
+   - Expand `POST /auth/register`.
+   - Click **Try it out**, enter your email and password, then click **Execute**.
+4. **Log in**:
+   - Expand `POST /auth/login`.
+   - Click **Try it out**, enter your credentials, and click **Execute**.
+   - Copy the long `token` string from the JSON response.
+5. **Authorize Swagger**:
+   - Scroll up and click the green **Authorize** button at the top right.
+   - Enter `Bearer <paste_your_token_here>` and click **Authorize**, then **Close**.
+6. **Manage Tickets**:
+   - `POST /tickets`: Create a ticket with a title and description.
+   - `GET /tickets`: View your ticket list.
+   - `GET /tickets/{id}`: View details for one of your tickets.
+   - `PATCH /tickets/{id}/status`: Change status from `open` to `in_progress`, then to `closed`.
 
 ---
 
-## 📋 API Endpoints
+## 📋 API Endpoint Reference
 
-| Method | Endpoint | Auth Required | Description |
+| Method | Endpoint | Requires Login? | Description |
 | :--- | :--- | :---: | :--- |
-| `GET` | `/health` | No | Public health status check |
-| `GET` | `/docs` | No | Interactive Swagger UI documentation |
-| `POST` | `/auth/register` | No | Register a new user with bcrypt password hashing |
-| `POST` | `/auth/login` | No | Login and receive signed HS256 JWT |
-| `POST` | `/tickets` | **Bearer JWT** | Create a new ticket (initial status: `open`) |
-| `GET` | `/tickets` | **Bearer JWT** | List all tickets owned by authenticated user |
-| `GET` | `/tickets/{id}` | **Bearer JWT** | Retrieve a single owned ticket by ID |
-| `PATCH`| `/tickets/{id}/status` | **Bearer JWT** | Update status (`open -> in_progress -> closed`) |
+| `GET` | `/health` | No | Instant health check verifying the server is running |
+| `GET` | `/docs` | No | Interactive Swagger UI documentation page |
+| `POST` | `/auth/register` | No | Create a new user account with secure password hashing |
+| `POST` | `/auth/login` | No | Sign in and receive a signed JWT access pass |
+| `POST` | `/tickets` | **Yes (Bearer JWT)** | Create a new support ticket (starts as `open`) |
+| `GET` | `/tickets` | **Yes (Bearer JWT)** | List all tickets belonging to the logged-in user |
+| `GET` | `/tickets/{id}` | **Yes (Bearer JWT)** | View a specific ticket belonging to the logged-in user |
+| `PATCH`| `/tickets/{id}/status` | **Yes (Bearer JWT)** | Advance ticket status (`open -> in_progress -> closed`) |
 
 ---
 
-## 🔒 Security & Ticket Ownership Model
+## 🔒 Security Highlights (In Plain English)
 
-- **Bcrypt Hashing**: User passwords are saved as bcrypt hashes (`bcrypt.DefaultCost`) and never logged or returned in responses.
-- **Strict User Ownership**: `user_id` is always derived from the validated JWT token in request context. Client attempts to specify `user_id` or ownership fields are completely ignored.
-- **Cross-User Protection**: A user cannot read (`GET /tickets/{id}`) or modify (`PATCH /tickets/{id}/status`) tickets belonging to other users. Attempting to do so returns `404 Not Found` (or `403 Forbidden`) to prevent resource enumeration.
-- **Status State Machine**:
-  - Valid transitions: `open -> in_progress`, `in_progress -> closed`.
-  - Illegal jumps (`open -> closed`, backward transitions) are rejected with `400 Bad Request`.
-  - `closed` tickets are strictly terminal and cannot be reopened (`409 Conflict`).
+1. **Passwords are Never Stored Plainly**: We use industry-standard **bcrypt** cryptography. Even if someone inspected the database directly, they would only see random scrambled text, never your real password.
+2. **Tamper-Proof Identity**: When you create a ticket, you cannot pretend to be someone else. The server looks solely at your authenticated login badge (`JWT`) to record who owns the ticket.
+3. **No Peeking (Privacy Isolation)**: If User A tries to view or modify User B's ticket ID, the server replies with `404 Not Found`. This prevents hackers from even guessing whether another user's ticket exists.
+4. **Strict Status Lifecycle**: Statuses cannot jump randomly (e.g. from `open` straight to `closed`), and resolved (`closed`) tickets cannot be reopened.
 
 ---
 
-## ⚙️ Environment Variables
+## ⚙️ Environment Configuration
 
-Copy `.env.example` to `.env` or configure them in your cloud hosting provider dashboard:
+Configuration is loaded from environment variables or a local `.env` file (see `.env.example`):
 
 | Variable | Default | Description |
 | :--- | :--- | :--- |
-| `PORT` | `8080` | HTTP server port (automatically provided by cloud platforms like Render) |
-| `MONGODB_URI` | `mongodb://localhost:27017` | MongoDB connection URI (use MongoDB Atlas for production) |
-| `MONGODB_DATABASE` | `ticket_system` | Target database name |
-| `JWT_SECRET` | *(required in production)* | Strong secret key for signing JWT tokens |
-| `JWT_EXPIRATION` | `24h` | JWT validity duration (e.g., `24h`, `12h`) |
+| `PORT` | `8080` | Port on which the HTTP server listens (automatically set on cloud hosts like Render) |
+| `MONGODB_URI` | `mongodb://localhost:27017` | MongoDB connection URL (use MongoDB Atlas for production) |
+| `MONGODB_DATABASE` | `ticket_system` | Name of the database collection |
+| `JWT_SECRET` | *(required in prod)* | Cryptographic key used to sign and verify login tokens |
+| `JWT_EXPIRATION` | `24h` | Length of time a login token remains valid |
 
 ---
 
-## 🐳 Docker Usage
+## 🐳 Docker Deployment
+
+You can build and run the entire backend in an isolated container without needing Go installed on your machine.
 
 ### 1. Build the Docker Image
 ```bash
@@ -92,133 +213,52 @@ docker build -t ticket-system .
 docker run -p 8080:8080 \
   -e MONGODB_URI="mongodb+srv://<user>:<password>@cluster.mongodb.net/?retryWrites=true&w=majority" \
   -e MONGODB_DATABASE="ticket_system" \
-  -e JWT_SECRET="your_secure_random_jwt_secret" \
+  -e JWT_SECRET="your_strong_secret_key" \
   -e JWT_EXPIRATION="24h" \
   ticket-system
 ```
 
-### 3. Verify Health Check and Swagger UI
-- Health: `curl http://localhost:8080/health` -> `{"status":"ok"}`
-- Swagger: Visit `http://localhost:8080/docs` in your browser.
+### 3. Check Status
+- Health: Visit `http://localhost:8080/health` (Returns `{"status":"ok"}`)
+- Swagger: Visit `http://localhost:8080/docs` in any web browser
 
 ---
 
-## 💻 Local Development
+## 💻 Local Development (For Developers)
 
-### Prerequisites
-- Go 1.22+
-- Local MongoDB running on port 27017 or a MongoDB Atlas connection URI
+### Requirements
+- **Go**: Version 1.22+ (tested with 1.24)
+- **MongoDB**: Local instance running on port 27017 or a free cloud cluster on [MongoDB Atlas](https://www.mongodb.com/cloud/atlas)
 
-### Run Locally
+### Start the Server
 ```bash
 go run ./cmd/server
 ```
 
-### Run Tests
+### Run Automated Tests
 ```bash
 go test -v -count=1 ./...
 ```
 
 ---
 
-## 🚀 Deployment Instructions (e.g., Render)
+## 🚀 Deploying to Cloud (e.g., Render)
 
-1. **Push code to GitHub**:
+1. **Push your code to GitHub**:
    ```bash
    git push origin main
    ```
-2. **MongoDB Atlas (Database)**:
-   - Create a free cluster on [MongoDB Atlas](https://www.mongodb.com/cloud/atlas).
-   - Create a database user and password.
-   - Whitelist network access (`0.0.0.0/0` for cloud hosting).
-   - Copy the connection string (`mongodb+srv://...`).
+2. **Create free MongoDB Database**:
+   - Go to [MongoDB Atlas](https://www.mongodb.com/cloud/atlas) and set up a free Shared cluster.
+   - Whitelist IP `0.0.0.0/0` in Network Access.
+   - Copy your connection string (`mongodb+srv://...`).
 3. **Deploy on Render**:
-   - Go to [dashboard.render.com](https://dashboard.render.com) and click **New + -> Web Service**.
-   - Connect your GitHub repository (`Ticket-System`).
-   - Select **Docker** environment (Render automatically detects the multi-stage `Dockerfile`).
-   - Add the following **Environment Variables** in Render Settings:
-     - `MONGODB_URI`: `mongodb+srv://<username>:<password>@cluster0.mongodb.net/?retryWrites=true&w=majority`
+   - In [Render Dashboard](https://dashboard.render.com), click **New + -> Web Service**.
+   - Select your GitHub repository (`Ticket-System`).
+   - Select **Docker** as the runtime environment.
+   - Set the following environment variables:
+     - `MONGODB_URI`: `<Your MongoDB Atlas connection URI>`
      - `MONGODB_DATABASE`: `ticket_system`
-     - `JWT_SECRET`: `<generated_random_secret_string>`
+     - `JWT_SECRET`: `<A random secret string for JWT signing>`
      - `JWT_EXPIRATION`: `24h`
-   - Click **Create Web Service**.
-4. **Update URLs**:
-   - Once deployed, copy your service URL and update the placeholders in this README.
-   - Verify `https://<your-service-name>.onrender.com/health` returns `{"status":"ok"}`.
-   - Verify `https://<your-service-name>.onrender.com/docs` displays the Swagger UI.
-
----
-
-## 📖 API Usage Examples via curl
-
-### 1. Register User
-```bash
-curl -X POST http://localhost:8080/auth/register \
-  -H "Content-Type: application/json" \
-  -d '{"email":"alice@example.com","password":"securepassword123"}'
-```
-**Response (201 Created)**:
-```json
-{
-  "id": "6aa953fcf3574c54469cddac",
-  "email": "alice@example.com"
-}
-```
-
-### 2. Login
-```bash
-curl -X POST http://localhost:8080/auth/login \
-  -H "Content-Type: application/json" \
-  -d '{"email":"alice@example.com","password":"securepassword123"}'
-```
-**Response (200 OK)**:
-```json
-{
-  "token": "eyJhbGciOiJIUzI1NiIsIn...",
-  "user": {
-    "id": "6aa953fcf3574c54469cddac",
-    "email": "alice@example.com"
-  }
-}
-```
-
-### 3. Create Ticket
-```bash
-curl -X POST http://localhost:8080/tickets \
-  -H "Content-Type: application/json" \
-  -H "Authorization: Bearer <TOKEN>" \
-  -d '{"title":"Cannot access dashboard","description":"Getting error 500 on dashboard page"}'
-```
-**Response (201 Created)**:
-```json
-{
-  "id": "6aa95d646543754963be2c07",
-  "user_id": "6aa953fcf3574c54469cddac",
-  "title": "Cannot access dashboard",
-  "description": "Getting error 500 on dashboard page",
-  "status": "open",
-  "created_at": "2026-09-15T14:49:48Z",
-  "updated_at": "2026-09-15T14:49:48Z"
-}
-```
-
-### 4. Update Ticket Status
-```bash
-curl -X PATCH http://localhost:8080/tickets/6aa95d646543754963be2c07/status \
-  -H "Content-Type: application/json" \
-  -H "Authorization: Bearer <TOKEN>" \
-  -d '{"status":"in_progress"}'
-```
-**Response (200 OK)**:
-```json
-{
-  "id": "6aa95d646543754963be2c07",
-  "user_id": "6aa953fcf3574c54469cddac",
-  "title": "Cannot access dashboard",
-  "description": "Getting error 500 on dashboard page",
-  "status": "in_progress",
-  "created_at": "2026-09-15T14:49:48Z",
-  "updated_at": "2026-09-15T14:52:10Z"
-}
-```
-*(Transitions must strictly follow `open -> in_progress -> closed`. Reopening closed tickets returns HTTP 409 Conflict).*
+   - Click **Deploy**. Render will build the Docker container and provide a live public URL.
