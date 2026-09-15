@@ -66,18 +66,19 @@ func main() {
 		authSvc := service.NewAuthService(userRepo, tokenManager)
 		authHandler := handlers.NewAuthHandler(authSvc)
 
+		ticketRepo := repository.NewMongoTicketRepository(mongoDB)
+		ticketSvc := service.NewTicketService(ticketRepo)
+		ticketHandler := handlers.NewTicketHandler(ticketSvc)
+
 		// Public authentication routes
 		r.Post("/auth/register", authHandler.Register)
 		r.Post("/auth/login", authHandler.Login)
 
-		// Protected route architecture ready for upcoming Prompt 5 (Tickets)
+		// Protected ticket routes
 		r.Group(func(protected chi.Router) {
 			protected.Use(appMiddleware.Auth(tokenManager))
-			// Future protected endpoints will be registered here:
-			// POST /tickets
-			// GET /tickets
-			// GET /tickets/{id}
-			// PATCH /tickets/{id}/status
+			protected.Post("/tickets", ticketHandler.Create)
+			protected.Get("/tickets", ticketHandler.List)
 		})
 	} else {
 		// If MongoDB is not connected, register stubs that return 503 Service Unavailable
