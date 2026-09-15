@@ -1,0 +1,9 @@
+# Docker ignore rules
+.git
+.gitignore
+.env
+*.local
+bin/
+dist/
+*.exe
+README.md

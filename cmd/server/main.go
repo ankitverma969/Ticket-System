@@ -100,7 +100,7 @@ func main() {
 	}
 
 	server := &http.Server{
-		Addr:         ":" + cfg.Port,
+		Addr:         "0.0.0.0:" + cfg.Port,
 		Handler:      r,
 		ReadTimeout:  10 * time.Second,
 		WriteTimeout: 10 * time.Second,
