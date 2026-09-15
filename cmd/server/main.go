@@ -12,7 +12,9 @@ import (
 
 	"github.com/go-chi/chi/v5"
 	chimiddleware "github.com/go-chi/chi/v5/middleware"
+	httpSwagger "github.com/swaggo/http-swagger/v2"
 
+	_ "ticket-system/docs"
 	"ticket-system/internal/auth"
 	"ticket-system/internal/config"
 	"ticket-system/internal/database"
@@ -61,6 +63,14 @@ func main() {
 
 	// Health check endpoint (always public and independent of DB)
 	r.Get("/health", handlers.Health)
+
+	// Interactive Swagger UI documentation endpoints (convenient /docs and /docs/*)
+	r.Get("/docs", func(w http.ResponseWriter, r *http.Request) {
+		http.Redirect(w, r, "/docs/index.html", http.StatusMovedPermanently)
+	})
+	r.Get("/docs/*", httpSwagger.Handler(
+		httpSwagger.URL("/docs/doc.json"), // Specifies the URL where swagger specification is retrieved
+	))
 
 	// Authentication routes
 	if mongoDB != nil {

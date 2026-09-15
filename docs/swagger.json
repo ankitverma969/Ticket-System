@@ -1,0 +1,433 @@
+{
+  "swagger": "2.0",
+  "info": {
+    "title": "Ticket System API",
+    "description": "Interactive Swagger/OpenAPI documentation for the EVA Bharat Backend Development Intern Ticket System API in Golang.",
+    "version": "1.0.0"
+  },
+  "host": "localhost:8080",
+  "basePath": "/",
+  "schemes": [
+    "http",
+    "https"
+  ],
+  "securityDefinitions": {
+    "BearerAuth": {
+      "type": "apiKey",
+      "name": "Authorization",
+      "in": "header",
+      "description": "Enter your Bearer token in the format: Bearer <your-jwt-token>"
+    }
+  },
+  "paths": {
+    "/health": {
+      "get": {
+        "tags": ["Health"],
+        "summary": "Health check",
+        "description": "Returns the service health status.",
+        "produces": ["application/json"],
+        "responses": {
+          "200": {
+            "description": "Service is healthy",
+            "schema": {
+              "$ref": "#/definitions/handlers.HealthResponse"
+            }
+          }
+        }
+      }
+    },
+    "/auth/register": {
+      "post": {
+        "tags": ["Authentication"],
+        "summary": "Register a new user",
+        "description": "Registers a new user with email and password using bcrypt password hashing.",
+        "consumes": ["application/json"],
+        "produces": ["application/json"],
+        "parameters": [
+          {
+            "name": "body",
+            "in": "body",
+            "required": true,
+            "schema": {
+              "$ref": "#/definitions/service.RegisterInput"
+            }
+          }
+        ],
+        "responses": {
+          "201": {
+            "description": "User created successfully",
+            "schema": {
+              "$ref": "#/definitions/service.UserOutput"
+            }
+          },
+          "400": {
+            "description": "Malformed JSON or validation error",
+            "schema": {
+              "$ref": "#/definitions/response.ErrorResponse"
+            }
+          },
+          "409": {
+            "description": "Email already registered",
+            "schema": {
+              "$ref": "#/definitions/response.ErrorResponse"
+            }
+          }
+        }
+      }
+    },
+    "/auth/login": {
+      "post": {
+        "tags": ["Authentication"],
+        "summary": "User login",
+        "description": "Authenticates user credentials and returns a signed HS256 JWT.",
+        "consumes": ["application/json"],
+        "produces": ["application/json"],
+        "parameters": [
+          {
+            "name": "body",
+            "in": "body",
+            "required": true,
+            "schema": {
+              "$ref": "#/definitions/service.LoginInput"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Login successful, returns JWT",
+            "schema": {
+              "$ref": "#/definitions/service.AuthOutput"
+            }
+          },
+          "400": {
+            "description": "Malformed JSON or validation error",
+            "schema": {
+              "$ref": "#/definitions/response.ErrorResponse"
+            }
+          },
+          "401": {
+            "description": "Invalid credentials",
+            "schema": {
+              "$ref": "#/definitions/response.ErrorResponse"
+            }
+          }
+        }
+      }
+    },
+    "/tickets": {
+      "post": {
+        "tags": ["Tickets"],
+        "summary": "Create a ticket",
+        "description": "Creates a new ticket owned by the authenticated user with initial status 'open'.",
+        "security": [
+          {
+            "BearerAuth": []
+          }
+        ],
+        "consumes": ["application/json"],
+        "produces": ["application/json"],
+        "parameters": [
+          {
+            "name": "body",
+            "in": "body",
+            "required": true,
+            "schema": {
+              "$ref": "#/definitions/service.CreateTicketInput"
+            }
+          }
+        ],
+        "responses": {
+          "201": {
+            "description": "Ticket created successfully",
+            "schema": {
+              "$ref": "#/definitions/service.TicketOutput"
+            }
+          },
+          "400": {
+            "description": "Validation error or malformed JSON",
+            "schema": {
+              "$ref": "#/definitions/response.ErrorResponse"
+            }
+          },
+          "401": {
+            "description": "Missing or invalid Bearer JWT",
+            "schema": {
+              "$ref": "#/definitions/response.ErrorResponse"
+            }
+          }
+        }
+      },
+      "get": {
+        "tags": ["Tickets"],
+        "summary": "List user tickets",
+        "description": "Returns all tickets belonging strictly to the authenticated user.",
+        "security": [
+          {
+            "BearerAuth": []
+          }
+        ],
+        "produces": ["application/json"],
+        "responses": {
+          "200": {
+            "description": "List of user tickets",
+            "schema": {
+              "type": "array",
+              "items": {
+                "$ref": "#/definitions/service.TicketOutput"
+              }
+            }
+          },
+          "401": {
+            "description": "Missing or invalid Bearer JWT",
+            "schema": {
+              "$ref": "#/definitions/response.ErrorResponse"
+            }
+          }
+        }
+      }
+    },
+    "/tickets/{id}": {
+      "get": {
+        "tags": ["Tickets"],
+        "summary": "Get ticket by ID",
+        "description": "Retrieves a single ticket by its MongoDB ObjectID if owned by the authenticated user.",
+        "security": [
+          {
+            "BearerAuth": []
+          }
+        ],
+        "produces": ["application/json"],
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "type": "string",
+            "description": "24-character hexadecimal MongoDB ObjectID"
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Ticket found",
+            "schema": {
+              "$ref": "#/definitions/service.TicketOutput"
+            }
+          },
+          "400": {
+            "description": "Invalid ticket ID format",
+            "schema": {
+              "$ref": "#/definitions/response.ErrorResponse"
+            }
+          },
+          "401": {
+            "description": "Missing or invalid Bearer JWT",
+            "schema": {
+              "$ref": "#/definitions/response.ErrorResponse"
+            }
+          },
+          "404": {
+            "description": "Ticket not found or owned by another user",
+            "schema": {
+              "$ref": "#/definitions/response.ErrorResponse"
+            }
+          }
+        }
+      }
+    },
+    "/tickets/{id}/status": {
+      "patch": {
+        "tags": ["Tickets"],
+        "summary": "Update ticket status",
+        "description": "Updates ticket status strictly following the transition rule: open -> in_progress -> closed. Closed tickets cannot be reopened.",
+        "security": [
+          {
+            "BearerAuth": []
+          }
+        ],
+        "consumes": ["application/json"],
+        "produces": ["application/json"],
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "type": "string",
+            "description": "24-character hexadecimal MongoDB ObjectID"
+          },
+          {
+            "name": "body",
+            "in": "body",
+            "required": true,
+            "schema": {
+              "$ref": "#/definitions/service.UpdateTicketStatusInput"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Status updated successfully",
+            "schema": {
+              "$ref": "#/definitions/service.TicketOutput"
+            }
+          },
+          "400": {
+            "description": "Invalid ticket ID or invalid status string",
+            "schema": {
+              "$ref": "#/definitions/response.ErrorResponse"
+            }
+          },
+          "401": {
+            "description": "Missing or invalid Bearer JWT",
+            "schema": {
+              "$ref": "#/definitions/response.ErrorResponse"
+            }
+          },
+          "404": {
+            "description": "Ticket not found or owned by another user",
+            "schema": {
+              "$ref": "#/definitions/response.ErrorResponse"
+            }
+          },
+          "409": {
+            "description": "Invalid status transition",
+            "schema": {
+              "$ref": "#/definitions/response.ErrorResponse"
+            }
+          }
+        }
+      }
+    }
+  },
+  "definitions": {
+    "handlers.HealthResponse": {
+      "type": "object",
+      "properties": {
+        "status": {
+          "type": "string",
+          "example": "ok"
+        }
+      }
+    },
+    "service.RegisterInput": {
+      "type": "object",
+      "required": ["email", "password"],
+      "properties": {
+        "email": {
+          "type": "string",
+          "example": "user@example.com"
+        },
+        "password": {
+          "type": "string",
+          "example": "password123"
+        }
+      }
+    },
+    "service.LoginInput": {
+      "type": "object",
+      "required": ["email", "password"],
+      "properties": {
+        "email": {
+          "type": "string",
+          "example": "user@example.com"
+        },
+        "password": {
+          "type": "string",
+          "example": "password123"
+        }
+      }
+    },
+    "service.UserOutput": {
+      "type": "object",
+      "properties": {
+        "id": {
+          "type": "string",
+          "example": "6aa953fcf3574c54469cddac"
+        },
+        "email": {
+          "type": "string",
+          "example": "user@example.com"
+        }
+      }
+    },
+    "service.AuthOutput": {
+      "type": "object",
+      "properties": {
+        "token": {
+          "type": "string",
+          "example": "eyJhbGciOiJIUzI1NiIsIn..."
+        },
+        "user": {
+          "$ref": "#/definitions/service.UserOutput"
+        }
+      }
+    },
+    "service.CreateTicketInput": {
+      "type": "object",
+      "required": ["title", "description"],
+      "properties": {
+        "title": {
+          "type": "string",
+          "example": "Unable to access dashboard"
+        },
+        "description": {
+          "type": "string",
+          "example": "The dashboard returns error 500 after login."
+        }
+      }
+    },
+    "service.UpdateTicketStatusInput": {
+      "type": "object",
+      "required": ["status"],
+      "properties": {
+        "status": {
+          "type": "string",
+          "enum": ["open", "in_progress", "closed"],
+          "example": "in_progress"
+        }
+      }
+    },
+    "service.TicketOutput": {
+      "type": "object",
+      "properties": {
+        "id": {
+          "type": "string",
+          "example": "6aa95d646543754963be2c07"
+        },
+        "user_id": {
+          "type": "string",
+          "example": "6aa953fcf3574c54469cddac"
+        },
+        "title": {
+          "type": "string",
+          "example": "Unable to access dashboard"
+        },
+        "description": {
+          "type": "string",
+          "example": "The dashboard returns error 500 after login."
+        },
+        "status": {
+          "type": "string",
+          "enum": ["open", "in_progress", "closed"],
+          "example": "open"
+        },
+        "created_at": {
+          "type": "string",
+          "format": "date-time"
+        },
+        "updated_at": {
+          "type": "string",
+          "format": "date-time"
+        }
+      }
+    },
+    "response.ErrorResponse": {
+      "type": "object",
+      "properties": {
+        "error": {
+          "type": "string",
+          "example": "invalid credentials"
+        }
+      }
+    }
+  }
+}
